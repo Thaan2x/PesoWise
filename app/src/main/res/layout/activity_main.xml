@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="PesoWise"
+        android:textSize="30sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="30dp"/>
+
+    <Button
+        android:id="@+id/btnTransactions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Transactions"/>
+
+    <Button
+        android:id="@+id/btnBudget"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Budget Monitoring"/>
+
+    <Button
+        android:id="@+id/btnReports"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Financial Reports"/>
+
+    <Button
+        android:id="@+id/btnCalendar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Calendar and Reminders"/>
+
+</LinearLayout>

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Financial Reports"
+            android:textSize="26sp"
+            android:textStyle="bold"/>
+
+        <TextView
+            android:id="@+id/txtReportMonth"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Current Month"
+            android:textSize="16sp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="24dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Net Balance"
+            android:textSize="18sp"/>
+
+        <TextView
+            android:id="@+id/txtNetBalance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="₱0.00"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="24dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Total Income"
+            android:textSize="18sp"/>
+
+        <TextView
+            android:id="@+id/txtIncome"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="₱0.00"
+            android:textSize="24sp"
+            android:layout_marginBottom="20dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Total Expenses"
+            android:textSize="18sp"/>
+
+        <TextView
+            android:id="@+id/txtExpenses"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="₱0.00"
+            android:textSize="24sp"
+            android:layout_marginBottom="30dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Income vs Expenses"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Income"/>
+
+        <ProgressBar
+            android:id="@+id/progressIncome"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="16dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#4CAF50"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="20dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Expenses"/>
+
+        <ProgressBar
+            android:id="@+id/progressExpenses"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="16dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#F87171"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="20dp"/>
+
+        <TextView
+            android:id="@+id/txtReportStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No transaction data connected yet."
+            android:textSize="14sp"
+            android:layout_marginBottom="20dp"/>
+
+        <Button
+            android:id="@+id/btnDemoData"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Demo Data"/>
+
+        <Button
+            android:id="@+id/btnBackReports"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Back to Dashboard"
+            android:layout_marginTop="12dp"/>
+
+    </LinearLayout>
+</ScrollView>
