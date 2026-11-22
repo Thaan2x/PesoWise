@@ -5,6 +5,10 @@ import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.example.pesowise.data.PesoWiseRepository
+import kotlinx.coroutines.launch
+import org.json.JSONArray
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -13,6 +17,7 @@ import kotlin.math.roundToInt
 class ReportsActivity : AppCompatActivity() {
 
     private var demoMode = false
+    private val repository by lazy { PesoWiseRepository() }
 
     private lateinit var txtIncome: TextView
     private lateinit var txtExpenses: TextView
@@ -69,19 +74,70 @@ class ReportsActivity : AppCompatActivity() {
     }
 
     private fun updateReport() {
+        if (demoMode) {
+            val income = 15000.0
+            val expenses = 3500.0
+            renderMetrics(income, expenses, "DEMO DATA ONLY - Not actual transactions")
+            btnDemoData.text = "Clear Demo Data"
+            return
+        }
 
-        // Temporary demonstration figures.
-        // Replace with Supabase transaction totals later.
-        val income = if (demoMode) 15000.0 else 0.0
-        val expenses = if (demoMode) 3500.0 else 0.0
+        btnDemoData.text = "Show Demo Data"
 
+        // Load local transactions & attempt Supabase fetch
+        val prefs = getSharedPreferences("pesowise_transactions", MODE_PRIVATE)
+        val jsonArray = try {
+            JSONArray(prefs.getString("entries", "[]"))
+        } catch (_: Exception) { JSONArray() }
+
+        var localIncome = 0.0
+        var localExpenses = 0.0
+
+        val currentMonthPrefix = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM", Locale.ENGLISH))
+
+        for (i in 0 until jsonArray.length()) {
+            val obj = jsonArray.optJSONObject(i) ?: continue
+            val date = obj.optString("date", "")
+            if (!date.startsWith(currentMonthPrefix)) continue
+            val amt = obj.optDouble("amount", 0.0)
+            val type = obj.optString("type", "expense")
+            if (type.equals("income", ignoreCase = true)) {
+                localIncome += amt
+            } else {
+                localExpenses += amt
+            }
+        }
+
+        renderMetrics(localIncome, localExpenses, "Connected to PesoWise Local & Supabase Storage")
+
+        lifecycleScope.launch {
+            val result = repository.getTransactions()
+            result.getOrNull()?.let { dtos ->
+                var remoteIncome = 0.0
+                var remoteExpenses = 0.0
+                for (dto in dtos) {
+                    if (dto.date.startsWith(currentMonthPrefix)) {
+                        if (dto.type.equals("income", ignoreCase = true)) {
+                            remoteIncome += dto.amount
+                        } else {
+                            remoteExpenses += dto.amount
+                        }
+                    }
+                }
+                if (dtos.isNotEmpty() && !demoMode) {
+                    renderMetrics(remoteIncome, remoteExpenses, "Live Supabase Sync Active")
+                }
+            }
+        }
+    }
+
+    private fun renderMetrics(income: Double, expenses: Double, statusText: String) {
         val balance = income - expenses
 
         txtIncome.text = formatPeso(income)
         txtExpenses.text = formatPeso(expenses)
         txtNetBalance.text = formatPeso(balance)
 
-        // Scale both bars relative to the larger value.
         val largest = maxOf(income, expenses)
 
         if (largest > 0.0) {
@@ -97,17 +153,7 @@ class ReportsActivity : AppCompatActivity() {
             progressExpenses.progress = 0
         }
 
-        txtReportStatus.text = if (demoMode) {
-            "DEMO DATA ONLY - Not actual transactions"
-        } else {
-            "No transaction data connected yet."
-        }
-
-        btnDemoData.text = if (demoMode) {
-            "Clear Demo Data"
-        } else {
-            "Show Demo Data"
-        }
+        txtReportStatus.text = statusText
     }
 
     private fun formatPeso(amount: Double): String {

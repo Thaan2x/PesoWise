@@ -17,6 +17,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.example.pesowise.data.PesoWiseRepository
+import com.example.pesowise.data.ReminderDto
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -32,6 +36,10 @@ class CalendarActivity : AppCompatActivity() {
     private lateinit var calendarView: CalendarView
     private lateinit var txtSelectedDate: TextView
     private lateinit var reminderContainer: LinearLayout
+
+    private val repository by lazy {
+        PesoWiseRepository()
+    }
 
     // Selected calendar date
     private var selectedDate: LocalDate = LocalDate.now()
@@ -276,6 +284,17 @@ class CalendarActivity : AppCompatActivity() {
 
                     // Save locally
                     saveReminders()
+
+                    // Sync to Supabase DB asynchronously
+                    lifecycleScope.launch {
+                        repository.insertReminder(
+                            ReminderDto(
+                                title = newReminder.title,
+                                dueDate = newReminder.dueDate.toString(),
+                                daysBefore = newReminder.daysBefore
+                            )
+                        )
+                    }
 
                     // Schedule notification
                     val isScheduled =

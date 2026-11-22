@@ -8,6 +8,11 @@ import android.text.InputType
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.example.pesowise.data.MonthlyBudgetDto
+import com.example.pesowise.data.PesoWiseRepository
+import com.example.pesowise.data.PlannedExpenseDto
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
@@ -16,22 +21,14 @@ import java.text.NumberFormat
 import java.time.YearMonth
 import java.util.Locale
 
-/**
- * PesoWise Monthly Budget Planner
- *
- * Features:
- * - Enter exact available money
- * - Create a monthly budget
- * - Add planned expenses
- * - Remove planned expenses
- * - Automatic budget calculations
- * - Budget status (short, over budget, enough)
- * - Save monthly budget data locally
- */
 class BudgetActivity : AppCompatActivity() {
 
     private val prefs by lazy {
         getSharedPreferences("PesoWiseBudget", MODE_PRIVATE)
+    }
+
+    private val repository by lazy {
+        PesoWiseRepository()
     }
 
     private val month: String
@@ -273,6 +270,19 @@ class BudgetActivity : AppCompatActivity() {
                         .putLong(key(field), cents)
                         .apply()
 
+                    // Sync budget / money available with Supabase
+                    lifecycleScope.launch {
+                        val money = savedAmount("money")
+                        val budget = savedAmount("budget")
+                        repository.upsertMonthlyBudget(
+                            MonthlyBudgetDto(
+                                month = month,
+                                availableMoneyCents = money,
+                                plannedBudgetCents = budget
+                            )
+                        )
+                    }
+
                     dialog.dismiss()
                     refresh()
                 }
@@ -341,16 +351,28 @@ class BudgetActivity : AppCompatActivity() {
 
                     else -> {
 
+                        val expName = nameInput.text.toString().trim()
                         val items = expenses()
 
                         items.add(
                             Expense(
-                                nameInput.text.toString().trim(),
+                                expName,
                                 cents
                             )
                         )
 
                         saveExpenses(items)
+
+                        // Sync planned expense with Supabase
+                        lifecycleScope.launch {
+                            repository.insertPlannedExpense(
+                                PlannedExpenseDto(
+                                    month = month,
+                                    name = expName,
+                                    cents = cents
+                                )
+                            )
+                        }
 
                         dialog.dismiss()
                         refresh()

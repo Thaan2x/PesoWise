@@ -16,9 +16,14 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.example.pesowise.data.PesoWiseRepository
+import com.example.pesowise.data.TransactionDto
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -30,6 +35,7 @@ class TransactionListActivity : AppCompatActivity() {
     private lateinit var results: LinearLayout
     private lateinit var dateLabel: TextView
     private val prefs by lazy { getSharedPreferences("pesowise_transactions", MODE_PRIVATE) }
+    private val repository by lazy { PesoWiseRepository() }
     private val purple = Color.rgb(103, 80, 164)
     private val ink = Color.rgb(42, 36, 65)
     private val light = Color.rgb(245, 241, 250)
@@ -189,15 +195,36 @@ class TransactionListActivity : AppCompatActivity() {
                 if (name.text.isBlank() || value == null || !value.isFinite() || value <= 0.0) {
                     Toast.makeText(this, "Enter a description and valid positive amount", Toast.LENGTH_LONG).show()
                 } else {
+                    val desc = name.text.toString().trim()
+                    val timeStr = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                    val typeStr = if (type.selectedItemPosition == 1) "income" else "expense"
+                    val catStr = if (type.selectedItemPosition == 1) "" else categories[categorySpinner.selectedItemPosition]
+
+                    // Save locally
                     val entries = readEntries()
                     entries.put(JSONObject()
-                        .put("name", name.text.toString().trim())
+                        .put("name", desc)
                         .put("amount", value)
                         .put("date", date.toString())
-                        .put("time", java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
-                        .put("type", if (type.selectedItemPosition == 1) "income" else "expense")
-                        .put("category", if (type.selectedItemPosition == 1) "" else categories[categorySpinner.selectedItemPosition]))
+                        .put("time", timeStr)
+                        .put("type", typeStr)
+                        .put("category", catStr))
                     prefs.edit().putString("entries", entries.toString()).apply()
+
+                    // Save to Supabase DB asynchronously
+                    lifecycleScope.launch {
+                        repository.insertTransaction(
+                            TransactionDto(
+                                name = desc,
+                                amount = value,
+                                type = typeStr,
+                                category = catStr,
+                                date = date.toString(),
+                                time = timeStr
+                            )
+                        )
+                    }
+
                     renderEntries()
                     dialog.dismiss()
                 }
