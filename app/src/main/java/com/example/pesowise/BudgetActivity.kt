@@ -1,65 +1,40 @@
-
 package com.example.pesowise
 
-import android.graphics.Color
-import android.os.Bundle
 import android.content.Context.MODE_PRIVATE
-import android.view.View
+import android.content.res.ColorStateList
+import android.os.Bundle
 import android.text.InputType
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.pesowise.data.MonthlyBudgetDto
 import com.example.pesowise.data.PesoWiseRepository
 import com.example.pesowise.data.PlannedExpenseDto
+import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.text.NumberFormat
 import java.time.YearMonth
 import java.util.Locale
 
-class BudgetFragment : Fragment(R.layout.activity_budget) {
-
-    private val prefs by lazy {
-        requireContext().getSharedPreferences("PesoWiseBudget", MODE_PRIVATE)
-    }
-
-    private val repository by lazy {
-        PesoWiseRepository()
-    }
-
-    private val month: String
-        get() = YearMonth.now().toString()
-
-    private val moneyFormat =
-        NumberFormat.getCurrencyInstance(
-            Locale.forLanguageTag("en-PH")
-        )
-
-    private lateinit var balanceView: TextView
-    private lateinit var budgetView: TextView
-    private lateinit var plannedView: TextView
-    private lateinit var leftView: TextView
-    private lateinit var statusView: TextView
-    private lateinit var progress: ProgressBar
-    private lateinit var expenseList: LinearLayout
+class BudgetFragment : Fragment() {
+    private var selectedMonth = YearMonth.now()
+    private val month: String get() = selectedMonth.toString()
+    private val prefs by lazy { requireContext().getSharedPreferences("PesoWiseBudget", MODE_PRIVATE) }
+    private val repository by lazy { PesoWiseRepository() }
+    private lateinit var ui: FinanceUi
+    private lateinit var screen: FinanceScreen
+    private lateinit var body: LinearLayout
+    private var removeButton: MaterialButton? = null
     private val selectedExpenseIndices = mutableSetOf<Int>()
     private var deleteSelectionMode = false
-
-    private fun updateDeleteControls() {
-        val trash = requireView().findViewById<ImageButton>(R.id.btnDeleteSelected)
-        val remove = requireView().findViewById<Button>(R.id.btnRemoveSelected)
-        val hasSelection = deleteSelectionMode && selectedExpenseIndices.isNotEmpty()
-        trash.visibility = if (hasSelection) View.GONE else View.VISIBLE
-        remove.visibility = if (hasSelection) View.VISIBLE else View.GONE
-        remove.text = "Remove (${selectedExpenseIndices.size})"
-        trash.contentDescription = if (deleteSelectionMode)
-            "Cancel expense selection" else "Select expenses to remove"
-    }
 
     private data class Expense(
         val name: String,
@@ -68,12 +43,6 @@ class BudgetFragment : Fragment(R.layout.activity_budget) {
 
     private fun key(suffix: String): String {
         return "${month}_$suffix"
-    }
-
-    private fun amount(cents: Long): String {
-        return moneyFormat.format(
-            BigDecimal.valueOf(cents, 2)
-        )
     }
 
     private fun savedAmount(suffix: String): Long {
@@ -145,72 +114,37 @@ class BudgetFragment : Fragment(R.layout.activity_budget) {
             .apply()
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
 
-        balanceView = requireView().findViewById(R.id.txtMoney)
-        budgetView = requireView().findViewById(R.id.txtBudget)
-        plannedView = requireView().findViewById(R.id.txtSpent)
-        leftView = requireView().findViewById(R.id.txtRemaining)
-        statusView = requireView().findViewById(R.id.txtStatus)
-        progress = requireView().findViewById(R.id.budgetProgress)
-        expenseList = requireView().findViewById(R.id.expenseList)
-        requireView().findViewById<ImageButton>(R.id.btnDeleteSelected).setOnClickListener {
-            deleteSelectionMode = !deleteSelectionMode
-            selectedExpenseIndices.clear()
-            refresh()
-        }
-        requireView().findViewById<Button>(R.id.btnRemoveSelected).setOnClickListener {
-            if (selectedExpenseIndices.isNotEmpty()) {
-                val count = selectedExpenseIndices.size
-                AlertDialog.Builder(requireContext())
-                    .setTitle("Delete selected expenses?")
-                    .setMessage("Remove $count planned expense(s)? Recorded transactions will not be deleted.")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Delete") { _, _ ->
-                        val updated = expenses()
-                        selectedExpenseIndices.sortedDescending().forEach { index ->
-                            if (index in updated.indices) updated.removeAt(index)
-                        }
-                        saveExpenses(updated)
-                        selectedExpenseIndices.clear()
-                        deleteSelectionMode = false
-                        refresh()
-                    }
-                    .show()
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        selectedMonth = savedInstanceState?.getString("month")?.let(YearMonth::parse) ?: selectedMonth
+        deleteSelectionMode = savedInstanceState?.getBoolean("selecting") ?: false
+        selectedExpenseIndices.clear()
+        selectedExpenseIndices.addAll(savedInstanceState?.getIntArray("selected")?.toList().orEmpty())
+        ui = FinanceUi(requireContext())
+        screen = ui.screen("Budget", selectedMonth, {
+            ui.pickMonth(selectedMonth) {
+                selectedMonth = it
+                deleteSelectionMode = false
+                selectedExpenseIndices.clear()
+                refresh()
             }
-        }
-
-        requireView().findViewById<Button>(R.id.btnSetMoney)
-            .setOnClickListener {
-                editAmount(
-                    "money",
-                    "Enter money available this month"
-                )
-            }
-
-        requireView().findViewById<Button>(R.id.btnSetBudget)
-            .setOnClickListener {
-                editAmount(
-                    "budget",
-                    "Create monthly budget"
-                )
-            }
-
-        requireView().findViewById<Button>(R.id.btnAddExpense)
-            .setOnClickListener {
-                addExpense()
-            }
-
+        })
+        body = ui.column()
+        ui.add(screen.content, body)
         refresh()
+        return screen.root
     }
 
     override fun onResume() {
         super.onResume()
+        refresh()
+    }
 
-        if (::balanceView.isInitialized) {
-            refresh()
-        }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("month", month)
+        outState.putBoolean("selecting", deleteSelectionMode)
+        outState.putIntArray("selected", selectedExpenseIndices.toIntArray())
+        super.onSaveInstanceState(outState)
     }
 
     private fun editAmount(
@@ -236,7 +170,7 @@ class BudgetFragment : Fragment(R.layout.activity_budget) {
             selectAll()
         }
 
-        val dialog = AlertDialog.Builder(requireContext())
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle(title)
             .setView(input)
             .setPositiveButton("Save", null)
@@ -314,7 +248,7 @@ class BudgetFragment : Fragment(R.layout.activity_budget) {
         container.addView(nameInput)
         container.addView(valueInput)
 
-        val dialog = AlertDialog.Builder(requireContext())
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle("Add planned expense")
             .setView(container)
             .setPositiveButton("Add", null)
@@ -378,133 +312,159 @@ class BudgetFragment : Fragment(R.layout.activity_budget) {
         dialog.show()
     }
 
-    private fun actualExpenses(): Pair<Map<String, Long>, Long> {
-        val totals = mutableMapOf<String, Long>()
-        var total = 0L
-        val transactionPrefs = requireContext().getSharedPreferences("pesowise_transactions", MODE_PRIVATE)
-        val transactions = try {
-            JSONArray(transactionPrefs.getString("entries", "[]"))
-        } catch (_: Exception) { JSONArray() }
-        for (i in 0 until transactions.length()) {
-            val transaction = transactions.optJSONObject(i) ?: continue
-            if (transaction.optString("type", "expense") != "expense") continue
-            val date = transaction.optString("date", "")
-            if (!date.startsWith("$month-")) continue
-            val value = try {
-                BigDecimal(transaction.getString("amount"))
-                    .movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact()
-            } catch (_: Exception) { continue }
-            if (value <= 0) continue
-            val category = transaction.optString("category", "Unassigned").ifBlank { "Unassigned" }
-            totals[category] = (totals[category] ?: 0L) + value
-            total += value
-        }
-        return totals to total
+
+    private fun updateDeleteControls() {
+        removeButton?.text = "Remove (${selectedExpenseIndices.size})"
+        removeButton?.isEnabled = selectedExpenseIndices.isNotEmpty()
     }
 
-    private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
+    private fun removeExpenses(indices: Set<Int>) {
+        if (indices.isEmpty()) return
+        MaterialAlertDialogBuilder(requireContext()).setTitle("Remove planned expenses?")
+            .setMessage("Remove ${indices.size} planned expense(s)? Recorded transactions are kept.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Remove") { _, _ ->
+                val items = expenses()
+                indices.sortedDescending().forEach { if (it in items.indices) items.removeAt(it) }
+                saveExpenses(items)
+                deleteSelectionMode = false
+                selectedExpenseIndices.clear()
+                refresh()
+            }.show()
+    }
 
     private fun refresh() {
+        if (!::body.isInitialized) return
+        screen.monthButton.text = selectedMonth.format(FinanceUi.MONTH_FORMAT)
+        screen.monthButton.contentDescription = "Select month, ${screen.monthButton.text}"
+        body.removeAllViews()
+        removeButton = null
+        val records = readLocalTransactions(requireContext()).filter { YearMonth.from(it.date) == selectedMonth }
+        val actual = categoryTotals(records)
+        val spent = financeTotals(records).expenses
         val money = savedAmount("money")
         val budget = savedAmount("budget")
         val items = expenses()
-        val planned = items.fold(0L) { total, item -> total + item.cents }
-        val (actualByCategory, spent) = actualExpenses()
-        val remainingMoney = money - spent
-        val remainingBudget = budget - spent
-        balanceView.text = amount(money)
-        requireView().findViewById<TextView>(R.id.txtCashLeft).apply {
-            text = amount(remainingMoney)
-            setTextColor(if (remainingMoney < 0L) Color.rgb(183, 28, 28) else Color.rgb(46, 125, 50))
-        }
-        requireView().findViewById<TextView>(R.id.txtTotalSpent).text = amount(spent)
-        budgetView.text = amount(budget)
-        plannedView.text = "Planned: ${amount(planned)}  |  Spent: ${amount(spent)}"
-        leftView.text = "Money left: ${amount(remainingMoney)}  |  Budget left: ${amount(remainingBudget)}"
-        val ratio = if (budget > 0L) ((spent.toDouble() / budget) * 100).toInt().coerceIn(0, 100) else 0
-        progress.progress = ratio
-        requireView().findViewById<TextView>(R.id.txtPercentage).text = "$ratio% of budget spent"
+        selectedExpenseIndices.retainAll(items.indices.toSet())
+        val planned = items.sumOf { it.cents }
         val projected = maxOf(planned, spent)
+
+        val hero = ui.card(FinanceColors.lavender)
+        val heroRow = ui.row()
+        val heroValues = ui.column()
+        ui.add(heroValues, ui.text("Money remaining", 14f, color = FinanceColors.muted))
+        ui.add(heroValues, ui.amount(money - spent, 32, if (spent > money) FinanceColors.coral else FinanceColors.ink), top = 5)
+        ui.add(heroValues, ui.text("From ${peso(money)} starting money", 12f, color = FinanceColors.muted), top = 3)
+        ui.add(heroRow, heroValues, width = 0, weight = 1f)
+        heroRow.addView(ui.iconButton(R.drawable.ic_ui_edit, "Edit starting money") {
+            editAmount("money", "Starting money for ${selectedMonth.format(FinanceUi.MONTH_FORMAT)}")
+        })
+        hero.addView(heroRow)
+        ui.add(body, hero)
+
+        val budgetCard = ui.card()
+        val budgetHeader = ui.row()
+        ui.add(budgetHeader, ui.text("Monthly budget", 18f, true), width = 0, weight = 1f)
+        budgetHeader.addView(ui.button("Edit") { editAmount("budget", "Monthly budget") })
+        ui.add(budgetCard, budgetHeader)
+        ui.add(budgetCard, ui.amount(spent, 26), top = 4)
+        ui.add(budgetCard, ui.text("of ${peso(budget)} spent", 12f, color = FinanceColors.muted), top = 2)
+        ui.progress(budgetCard, spent, budget, if (spent > budget && budget > 0L) FinanceColors.coral else FinanceColors.purple)
+        val footer = ui.row()
+        val remaining = budget - spent
+        ui.add(footer, ui.text(if (remaining >= 0L) "${peso(remaining)} left" else "${peso(-remaining)} over",
+            13f, true, if (remaining < 0L) FinanceColors.coral else FinanceColors.muted), width = 0, weight = 1f)
         val status = when {
-            money == 0L -> "Enter your available money to check affordability."
-            budget == 0L -> "Create a monthly budget to get started."
-            spent > money -> "SHORT ON FUNDS: Actual spending exceeds your money by ${amount(spent - money)}."
-            projected > money -> "SHORT ON FUNDS: Planned spending exceeds your money by ${amount(projected - money)}."
-            spent > budget -> "OVER BUDGET: Spending exceeds your budget by ${amount(spent - budget)}."
-            projected > budget -> "OVER BUDGET: Planned expenses exceed your budget by ${amount(projected - budget)}."
-            projected == money -> "JUST ENOUGH: Your money exactly covers your expenses."
-            else -> "MORE THAN ENOUGH: ${amount(remainingMoney)} cash left; ${amount(money - projected)} projected after planned expenses."
+            money == 0L -> "Add money"
+            budget == 0L -> "Set budget"
+            projected > money -> "Short on funds"
+            projected > budget -> "Over budget"
+            else -> "On track"
         }
-        statusView.text = status
-        statusView.setTextColor(if (spent > money || projected > money || spent > budget || projected > budget)
-            Color.rgb(183, 28, 28) else Color.rgb(46, 125, 50))
-        expenseList.removeAllViews()
-        updateDeleteControls()
-        val purple = Color.rgb(103, 80, 164)
-        fun cell(value: String, width: Int, bold: Boolean = false): TextView = TextView(requireContext()).apply {
-            text = value
-            textSize = if (bold) 14f else 15f
-            setTextColor(if (bold) purple else Color.DKGRAY)
-            setPadding(10.dp(), 16.dp(), 10.dp(), 16.dp())
-            layoutParams = LinearLayout.LayoutParams(width.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
-            if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
+        val healthy = money > 0L && budget > 0L && projected <= minOf(money, budget)
+        footer.addView(ui.badge(status, if (healthy) FinanceColors.green else FinanceColors.purple,
+            if (healthy) FinanceColors.greenTint else FinanceColors.lavender))
+        ui.add(budgetCard, footer)
+        if (money > 0L && projected > money) {
+            ui.add(budgetCard, ui.text("Planned or actual spending exceeds your starting money by ${peso(projected - money)}.",
+                12f, color = FinanceColors.coral), top = 10)
+        } else if (budget > 0L && planned > budget) {
+            ui.add(budgetCard, ui.text("Your planned expenses exceed the budget by ${peso(planned - budget)}.",
+                12f, color = FinanceColors.coral), top = 10)
         }
-        fun tableRow(category: String, plan: String, actual: String, left: String, header: Boolean = false): LinearLayout =
-            LinearLayout(requireContext()).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-                if (header) setBackgroundColor(Color.rgb(240, 235, 248))
-                addView(cell(category, 135, header))
-                addView(cell(plan, 115, header))
-                addView(cell(actual, 115, header))
-                addView(cell(left, 115, header))
-            }
-        expenseList.addView(tableRow("Category", "Planned", "Spent", "Left", true))
-        // A checkbox selects a planned expense for bulk deletion; it does not record spending.
+        ui.add(body, budgetCard, top = 16)
+
+        val add = ui.button("Add", icon = R.drawable.ic_ui_plus, onClick = ::addExpense)
+        ui.heading(body, "Planned expenses", if (deleteSelectionMode)
+            ui.button("Cancel") { deleteSelectionMode = false; selectedExpenseIndices.clear(); refresh() } else add)
+        if (deleteSelectionMode) {
+            removeButton = ui.button("Remove (0)", true) { removeExpenses(selectedExpenseIndices.toSet()) }
+            ui.add(body, removeButton!!, bottom = 12)
+            updateDeleteControls()
+        }
         items.forEachIndexed { index, item ->
-            val actual = actualByCategory[item.name] ?: 0L
-            val row = LinearLayout(requireContext()).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-            }
-            val checkbox = CheckBox(requireContext()).apply {
-                text = item.name
-                textSize = 15f
-                setTextColor(Color.DKGRAY)
-                buttonTintList = android.content.res.ColorStateList.valueOf(purple)
-                isChecked = index in selectedExpenseIndices
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) selectedExpenseIndices.add(index)
-                    else selectedExpenseIndices.remove(index)
-                    updateDeleteControls()
-                }
-            }
+            val value = actual[item.name] ?: 0L
+            val card = ui.card(padding = 12)
+            val row = ui.row()
             if (deleteSelectionMode) {
-                row.addView(checkbox, LinearLayout.LayoutParams(135.dp(), 60.dp()))
-            } else {
-                row.addView(cell(item.name, 135))
+                row.addView(CheckBox(requireContext()).apply {
+                    contentDescription = "Select ${item.name}"
+                    buttonTintList = ColorStateList.valueOf(FinanceColors.purple)
+                    isChecked = index in selectedExpenseIndices
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) selectedExpenseIndices.add(index) else selectedExpenseIndices.remove(index)
+                        updateDeleteControls()
+                    }
+                })
+            } else row.addView(ui.icon(categoryIcon(item.name)))
+            ui.gap(row, 12, true)
+            val labels = ui.column()
+            ui.add(labels, ui.text(item.name, 15f, true))
+            ui.add(labels, ui.text("${peso(value)} / ${peso(item.cents)}", 12f, color = FinanceColors.muted), top = 3)
+            ui.add(row, labels, width = 0, weight = 1f)
+            if (!deleteSelectionMode) {
+                lateinit var more: MaterialButton
+                more = ui.iconButton(R.drawable.ic_ui_more, "Options for ${item.name}") {
+                    PopupMenu(requireContext(), more).apply {
+                        menu.add("Remove expense")
+                        menu.add("Select multiple")
+                        setOnMenuItemClickListener {
+                            if (it.title == "Remove expense") removeExpenses(setOf(index))
+                            else {
+                                deleteSelectionMode = true
+                                selectedExpenseIndices.add(index)
+                                refresh()
+                            }
+                            true
+                        }
+                    }.show()
+                }
+                more.strokeWidth = 0
+                row.addView(more)
             }
-            row.addView(cell(amount(item.cents), 115))
-            row.addView(cell(amount(actual), 115))
-            row.addView(cell(amount(item.cents - actual), 115))
-            expenseList.addView(row)
-            expenseList.addView(View(requireContext()).apply {
-                setBackgroundColor(Color.rgb(233, 228, 239))
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, 1.dp()
-                )
-            })
+            ui.add(card, row)
+            ui.progress(card, value, item.cents, if (value > item.cents) FinanceColors.coral else FinanceColors.purple)
+            ui.add(card, ui.text(if (value <= item.cents) "${peso(item.cents - value)} remaining" else "${peso(value - item.cents)} over plan",
+                11f, color = if (value > item.cents) FinanceColors.coral else FinanceColors.muted))
+            ui.add(body, card, bottom = 8)
         }
         val assigned = items.map { it.name }.toSet()
-        actualByCategory.filterKeys { it !in assigned }.toSortedMap().forEach { (category, value) ->
-            expenseList.addView(tableRow(category, "—", amount(value), "—"))
+        actual.filterKeys { it !in assigned }.forEach { (category, value) ->
+            val card = ui.card(padding = 12)
+            val row = ui.row()
+            row.addView(ui.icon(categoryIcon(category)))
+            ui.gap(row, 12, true)
+            val labels = ui.column()
+            ui.add(labels, ui.text(category, 15f, true))
+            ui.add(labels, ui.text("${peso(value)} spent · No plan set", 12f, color = FinanceColors.muted), top = 3)
+            ui.add(row, labels, width = 0, weight = 1f)
+            ui.add(card, row)
+            ui.add(body, card, bottom = 8)
         }
-        if (items.isEmpty() && actualByCategory.isEmpty()) {
-            expenseList.addView(TextView(requireContext()).apply {
-                text = "No expenses yet. Add a planned expense or record a purchase."
-                setPadding(8, 20, 8, 20)
-            })
+        if (items.isEmpty() && actual.isEmpty()) {
+            ui.empty(body, "Give your money a plan", "Add a planned expense to start tracking each category.", R.drawable.ic_ui_bag)
         }
-
+        ui.add(body, ui.text("Category spending updates automatically when you add an expense transaction.",
+            12f, color = FinanceColors.muted), top = 12)
     }
 }

@@ -2,22 +2,20 @@ package com.example.pesowise
 
 import android.app.DatePickerDialog
 import android.content.Context.MODE_PRIVATE
+import android.content.res.ColorStateList
+import android.os.Bundle
+import android.text.InputType
+import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.os.Bundle
-import android.view.Gravity
-import android.widget.Button
-import android.widget.Spinner
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
-import android.widget.Toast
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.pesowise.data.PesoWiseRepository
@@ -25,292 +23,257 @@ import com.example.pesowise.data.TransactionDto
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class TransactionsFragment : Fragment() {
-    private val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
-    private val timeFormatter = java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+    private var selectedMonth = YearMonth.now()
     private var startDate: LocalDate? = null
     private var endDate: LocalDate? = null
+    private var allDates = false
+    private var typeFilter = 0
+    private lateinit var ui: FinanceUi
+    private lateinit var screen: FinanceScreen
+    private lateinit var summaries: LinearLayout
+    private lateinit var filters: LinearLayout
     private lateinit var results: LinearLayout
     private lateinit var dateLabel: TextView
     private val prefs by lazy { requireContext().getSharedPreferences("pesowise_transactions", MODE_PRIVATE) }
     private val repository by lazy { PesoWiseRepository() }
-    private val purple = Color.rgb(103, 80, 164)
-    private val ink = Color.rgb(42, 36, 65)
-    private val light = Color.rgb(245, 241, 250)
+    private val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
 
-    private data class Entry(val date: LocalDate, val time: String, val name: String, val amount: Double, val type: String, val order: Int) {
-        val sortTime: String get() = if (time.matches(Regex("\\d{2}:\\d{2}"))) time else "00:00"
-    }
-
-    private fun button(label: String, compact: Boolean = true) = Button(requireContext()).apply {
-        text = label
-        isAllCaps = false
-        textSize = if (compact) 12f else 14f
-        setTextColor(Color.WHITE)
-        background = GradientDrawable().apply {
-            cornerRadius = 40.dp().toFloat()
-            setColor(purple)
-        }
-        minHeight = 0
-        minimumHeight = 0
-        setPadding(16.dp(), 0, 16.dp(), 0)
-    }
-
-    private fun textLabel(value: String, size: Float = 15f, bold: Boolean = false) = TextView(requireContext()).apply {
-        text = value
-        textSize = size
-        setTextColor(ink)
-        if (bold) setTypeface(null, Typeface.BOLD)
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        selectedMonth = savedInstanceState?.getString("month")?.let(YearMonth::parse) ?: selectedMonth
         startDate = savedInstanceState?.getString("start_date")?.let(LocalDate::parse)
         endDate = savedInstanceState?.getString("end_date")?.let(LocalDate::parse)
-        val root = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(255, 251, 255))
-        }
-        root.addView(TextView(requireContext()).apply {
-            text = "Transaction History"
-            textSize = 26f
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.START
-            setPadding(24.dp(), 24.dp(), 24.dp(), 16.dp())
-        })
-        val addTransactionButton = button("+ Add Transaction", false)
-        root.addView(addTransactionButton, LinearLayout.LayoutParams(-1, 48.dp()).apply {
-            leftMargin = 20.dp()
-            rightMargin = 20.dp()
-            bottomMargin = 8.dp()
-        })
-        addTransactionButton.setOnClickListener { showAddTransaction() }
-        val controls = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(18.dp(), 8.dp(), 18.dp(), 12.dp())
-        }
-        dateLabel = textLabel("", 14f, true)
-        controls.addView(dateLabel, LinearLayout.LayoutParams(0, -2, 1f))
-        controls.addView(button("Date Range"), LinearLayout.LayoutParams(112.dp(), 36.dp()).apply {
-            leftMargin = 8.dp()
-        })
-        controls.getChildAt(1).setOnClickListener { showDateRangeDialog() }
-        root.addView(controls)
-        root.addView(android.view.View(requireContext()).apply { setBackgroundColor(Color.rgb(229, 222, 237)) }, LinearLayout.LayoutParams(-1, 1.dp()))
-        val scroll = ScrollView(requireContext()).apply { isFillViewport = true }
-        results = LinearLayout(requireContext()).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(results)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        allDates = savedInstanceState?.getBoolean("all_dates") ?: false
+        typeFilter = savedInstanceState?.getInt("type_filter") ?: 0
+        ui = FinanceUi(requireContext())
+        screen = ui.screen("Transactions", selectedMonth, {
+            ui.pickMonth(selectedMonth) {
+                selectedMonth = it
+                startDate = null
+                endDate = null
+                allDates = false
+                renderEntries()
+            }
+        }, "Add transaction", ::showAddTransaction)
+        summaries = ui.row()
+        filters = ui.row()
+        dateLabel = ui.text("", 12f, color = FinanceColors.muted)
+        results = ui.column()
+        ui.add(screen.content, summaries)
+        ui.add(screen.content, filters, top = 20, bottom = 12)
+        ui.add(screen.content, dateLabel, bottom = 10)
+        ui.add(screen.content, results)
         renderEntries()
-        return root
+        return screen.root
+    }
+
+    override fun onResume() {
+        super.onResume()
+        renderEntries()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("month", selectedMonth.toString())
         outState.putString("start_date", startDate?.toString())
         outState.putString("end_date", endDate?.toString())
+        outState.putBoolean("all_dates", allDates)
+        outState.putInt("type_filter", typeFilter)
         super.onSaveInstanceState(outState)
     }
 
-    private fun showDateRangeDialog() {
-        var selectedStart = startDate
-        var selectedEnd = endDate
-        val layout = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(20.dp(), 12.dp(), 20.dp(), 4.dp())
-        }
-        val from = button(selectedStart?.let { "Start: ${it.format(formatter)}" } ?: "Select Start Date")
-        val to = button(selectedEnd?.let { "End: ${it.format(formatter)}" } ?: "Select End Date")
-        from.setOnClickListener { pickDate(selectedStart) { selectedStart = it; from.text = "Start: ${it.format(formatter)}" } }
-        to.setOnClickListener { pickDate(selectedEnd) { selectedEnd = it; to.text = "End: ${it.format(formatter)}" } }
-        layout.addView(from, LinearLayout.LayoutParams(-1, 42.dp()).apply { bottomMargin = 10.dp() })
-        layout.addView(to, LinearLayout.LayoutParams(-1, 42.dp()))
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Select Date Range")
-            .setView(layout)
-            .setPositiveButton("Search", null)
-            .setNeutralButton("Show All", null)
-            .setNegativeButton("Cancel", null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val first = selectedStart
-                val last = selectedEnd
-                if (first == null || last == null) Toast.makeText(requireContext(), "Select both dates", Toast.LENGTH_SHORT).show()
-                else if (first.isAfter(last)) Toast.makeText(requireContext(), "Start date must not be after end date", Toast.LENGTH_LONG).show()
-                else { startDate = first; endDate = last; renderEntries(); dialog.dismiss() }
+    private fun renderEntries() {
+        if (!::results.isInitialized) return
+        val records = readLocalTransactions(requireContext()).filter { record ->
+            when {
+                startDate != null && endDate != null -> !record.date.isBefore(startDate) && !record.date.isAfter(endDate)
+                allDates -> true
+                else -> YearMonth.from(record.date) == selectedMonth
             }
-            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-                startDate = null; endDate = null; renderEntries(); dialog.dismiss()
+        }
+        val totals = financeTotals(records)
+        summaries.removeAllViews()
+        ui.add(summaries, ui.summary("Income", totals.income, true), width = 0, weight = 1f)
+        ui.gap(summaries, 12, true)
+        ui.add(summaries, ui.summary("Expenses", totals.expenses, false), width = 0, weight = 1f)
+
+        screen.monthButton.text = when {
+            startDate != null -> "Custom dates"
+            allDates -> "All dates"
+            else -> selectedMonth.format(FinanceUi.MONTH_FORMAT)
+        }
+        screen.monthButton.contentDescription = "Select month, ${screen.monthButton.text}"
+        filters.removeAllViews()
+        listOf("All", "Income", "Expenses").forEachIndexed { index, label ->
+            val chip = ui.button(label) { typeFilter = index; renderEntries() }.apply {
+                backgroundTintList = ColorStateList.valueOf(if (index == typeFilter) FinanceColors.lavender else android.graphics.Color.TRANSPARENT)
+                strokeWidth = if (index == typeFilter) 0 else ui.dp(1)
+                setPadding(ui.dp(8), 0, ui.dp(8), 0)
+                textSize = 12f
+                isSelected = index == typeFilter
+                contentDescription = label + if (isSelected) ", selected" else ""
+            }
+            if (index > 0) ui.gap(filters, 6, true)
+            ui.add(filters, chip, width = 0, weight = 1f)
+        }
+        ui.gap(filters, 8, true)
+        filters.addView(ui.iconButton(R.drawable.ic_nav_calendar, "Filter by date range", ::showDateRangeDialog))
+        dateLabel.visibility = if (startDate != null) View.VISIBLE else View.GONE
+        dateLabel.text = if (startDate != null && endDate != null)
+            "${startDate!!.format(formatter)} – ${endDate!!.format(formatter)}" else ""
+
+        val matches = records.filter { typeFilter == 0 || (typeFilter == 1 && it.isIncome) || (typeFilter == 2 && !it.isIncome) }
+        results.removeAllViews()
+        if (matches.isEmpty()) {
+            ui.empty(results, "No transactions here yet", "Add a transaction or choose another date range.", R.drawable.ic_ui_receipt)
+            return
+        }
+        val card = ui.card(padding = 12)
+        var previous: LocalDate? = null
+        matches.forEach { entry ->
+            if (entry.date != previous) {
+                val dateText = when (entry.date) {
+                    LocalDate.now() -> "Today, " + entry.date.format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH))
+                    LocalDate.now().minusDays(1) -> "Yesterday"
+                    else -> entry.date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ENGLISH))
+                }
+                ui.add(card, ui.text(dateText, 13f, true).apply {
+                    background = ui.shape(FinanceColors.lavender, 10)
+                    setPadding(ui.dp(10), ui.dp(9), ui.dp(10), ui.dp(9))
+                }, top = if (previous == null) 0 else 12, bottom = 4)
+                previous = entry.date
+            } else ui.divider(card, 4, 4)
+            val row = ui.row().apply { setPadding(0, ui.dp(12), 0, ui.dp(12)) }
+            row.addView(ui.icon(if (entry.isIncome) R.drawable.ic_ui_income else categoryIcon(entry.category),
+                if (entry.isIncome) FinanceColors.green else FinanceColors.purple,
+                if (entry.isIncome) FinanceColors.greenTint else FinanceColors.lavender))
+            ui.gap(row, 12, true)
+            val names = ui.column()
+            ui.add(names, ui.text(entry.name, 15f, true).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END })
+            val detail = (if (entry.isIncome) "Income" else entry.category) + " · " +
+                entry.time.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH))
+            ui.add(names, ui.text(detail, 11f, color = FinanceColors.muted).apply { maxLines = 2 }, top = 3)
+            ui.add(row, names, width = 0, weight = 1f)
+            ui.gap(row, 6, true)
+            row.addView(ui.text((if (entry.isIncome) "+" else "−") + peso(entry.cents, true),
+                14f, true, if (entry.isIncome) FinanceColors.green else FinanceColors.ink))
+            ui.add(card, row)
+        }
+        ui.add(results, card)
+    }
+
+    private fun pickDate(date: LocalDate, onSelected: (LocalDate) -> Unit) {
+        DatePickerDialog(requireContext(), { _, year, month, day ->
+            onSelected(LocalDate.of(year, month + 1, day))
+        }, date.year, date.monthValue - 1, date.dayOfMonth).show()
+    }
+
+    private fun showDateRangeDialog() {
+        var first = startDate ?: selectedMonth.atDay(1)
+        var last = endDate ?: selectedMonth.atEndOfMonth()
+        val body = ui.column(20)
+        val from = ui.button("From: ${first.format(formatter)}")
+        val to = ui.button("To: ${last.format(formatter)}")
+        from.setOnClickListener { pickDate(first) { first = it; from.text = "From: ${it.format(formatter)}" } }
+        to.setOnClickListener { pickDate(last) { last = it; to.text = "To: ${it.format(formatter)}" } }
+        ui.add(body, from, bottom = 12)
+        ui.add(body, to)
+        val dialog = MaterialAlertDialogBuilder(requireContext()).setTitle("Date range").setView(body)
+            .setPositiveButton("Apply", null).setNeutralButton("All dates", null)
+            .setNegativeButton("Cancel", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (first.isAfter(last)) {
+                    to.error = "End date must be on or after start date"
+                } else {
+                    startDate = first; endDate = last; allDates = false
+                    renderEntries(); dialog.dismiss()
+                }
+            }
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                startDate = null; endDate = null; allDates = true
+                renderEntries(); dialog.dismiss()
             }
         }
         dialog.show()
-    }
-
-    private fun pickDate(current: LocalDate?, onSelected: (LocalDate) -> Unit) {
-        val date = current ?: LocalDate.now()
-        DatePickerDialog(requireContext(), { _, year, month, day -> onSelected(LocalDate.of(year, month + 1, day)) },
-            date.year, date.monthValue - 1, date.dayOfMonth).show()
     }
 
     private fun showAddTransaction() {
-        val layout = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(22.dp(), 8.dp(), 22.dp(), 4.dp())
-        }
-        val name = EditText(requireContext()).apply { hint = "Description (e.g. Groceries)" }
-        val amount = EditText(requireContext()).apply {
-            hint = "Amount in PHP"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-        }
-        val types = arrayOf("Expense", "Income")
-        val categories = mutableListOf("Unassigned")
-        val budgetPrefs = requireContext().getSharedPreferences("PesoWiseBudget", MODE_PRIVATE)
-        val planned = try {
-            JSONArray(budgetPrefs.getString("${java.time.YearMonth.now()}_expenses", "[]"))
-        } catch (_: Exception) { JSONArray() }
-        for (i in 0 until planned.length()) {
-            val category = planned.optJSONObject(i)?.optString("name", "") ?: ""
-            if (category.isNotBlank() && category !in categories) categories.add(category)
-        }
-        val categorySpinner = Spinner(requireContext()).apply {
-            adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, categories)
-        }
+        val body = ui.column(20)
+        val name = EditText(requireContext()).apply { hint = "Description"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES }
+        val amount = EditText(requireContext()).apply { hint = "Amount in PHP"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL }
         val type = Spinner(requireContext()).apply {
-            adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, types)
+            adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, listOf("Expense", "Income"))
         }
-        var date = LocalDate.now()
-        val dateButton = button("Date: ${date.format(formatter)}")
-        dateButton.setOnClickListener { pickDate(date) { chosen -> date = chosen; dateButton.text = "Date: ${date.format(formatter)}" } }
-        layout.addView(name)
-        layout.addView(amount)
-        layout.addView(type)
-        layout.addView(TextView(requireContext()).apply { text = "Budget category (for expenses)" })
-        layout.addView(categorySpinner)
-        layout.addView(dateButton, LinearLayout.LayoutParams(-1, 42.dp()).apply { topMargin = 8.dp() })
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Add Transaction").setView(layout)
+        var date = if (selectedMonth == YearMonth.now()) LocalDate.now() else selectedMonth.atDay(1)
+        val categories = mutableListOf<String>()
+        val categoryAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, categories)
+        val category = Spinner(requireContext()).apply { adapter = categoryAdapter }
+        fun loadCategories() {
+            val previous = category.selectedItem?.toString()
+            val stored = requireContext().getSharedPreferences("PesoWiseBudget", MODE_PRIVATE)
+            val plans = runCatching { JSONArray(stored.getString("${YearMonth.from(date)}_expenses", "[]")) }.getOrDefault(JSONArray())
+            categoryAdapter.setNotifyOnChange(false)
+            categoryAdapter.clear()
+            categoryAdapter.add("Unassigned")
+            for (i in 0 until plans.length()) {
+                val value = plans.optJSONObject(i)?.optString("name").orEmpty()
+                if (value.isNotBlank() && value !in categories) categoryAdapter.add(value)
+            }
+            categoryAdapter.notifyDataSetChanged()
+            val index = categories.indexOf(previous)
+            if (index >= 0) category.setSelection(index)
+        }
+        loadCategories()
+        val dateButton = ui.button("Date: ${date.format(formatter)}")
+        dateButton.setOnClickListener {
+            pickDate(date) { date = it; dateButton.text = "Date: ${it.format(formatter)}"; loadCategories() }
+        }
+        ui.add(body, name)
+        ui.add(body, amount)
+        ui.add(body, type, top = 8)
+        ui.add(body, ui.text("Budget category for expenses", 12f, color = FinanceColors.muted), top = 12)
+        ui.add(body, category)
+        ui.add(body, dateButton, top = 12)
+        val scroll = android.widget.ScrollView(requireContext()).apply { addView(body) }
+        val dialog = MaterialAlertDialogBuilder(requireContext()).setTitle("Add transaction").setView(scroll)
             .setNegativeButton("Cancel", null).setPositiveButton("Save", null).create()
         dialog.setOnShowListener {
-            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val value = amount.text.toString().toDoubleOrNull()
-                if (name.text.isBlank() || value == null || !value.isFinite() || value <= 0.0) {
-                    Toast.makeText(requireContext(), "Enter a description and valid positive amount", Toast.LENGTH_LONG).show()
-                } else {
-                    val desc = name.text.toString().trim()
-                    val timeStr = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                    val typeStr = if (type.selectedItemPosition == 1) "income" else "expense"
-                    val catStr = if (type.selectedItemPosition == 1) "" else categories[categorySpinner.selectedItemPosition]
-
-                    // Save locally
-                    val entries = readEntries()
-                    entries.put(JSONObject()
-                        .put("name", desc)
-                        .put("amount", value)
-                        .put("date", date.toString())
-                        .put("time", timeStr)
-                        .put("type", typeStr)
-                        .put("category", catStr))
-                    prefs.edit().putString("entries", entries.toString()).apply()
-
-                    // Save to Supabase DB asynchronously
-                    lifecycleScope.launch {
-                        repository.insertTransaction(
-                            TransactionDto(
-                                name = desc,
-                                amount = value,
-                                type = typeStr,
-                                category = catStr,
-                                date = date.toString(),
-                                time = timeStr
-                            )
-                        )
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val cents = runCatching { BigDecimal(amount.text.toString().trim()).movePointRight(2)
+                    .setScale(0, RoundingMode.UNNECESSARY).longValueExact() }.getOrNull()
+                when {
+                    name.text.isBlank() -> name.error = "Enter a description"
+                    cents == null || cents <= 0L -> amount.error = "Enter a positive amount with up to 2 decimals"
+                    else -> {
+                        val desc = name.text.toString().trim()
+                        val time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                        val kind = if (type.selectedItemPosition == 1) "income" else "expense"
+                        val cat = if (kind == "income") "" else category.selectedItem?.toString().orEmpty()
+                        val value = cents / 100.0
+                        val array = runCatching { JSONArray(prefs.getString("entries", "[]")) }.getOrDefault(JSONArray())
+                        array.put(JSONObject().put("name", desc).put("amount", value).put("date", date.toString())
+                            .put("time", time).put("type", kind).put("category", cat))
+                        prefs.edit().putString("entries", array.toString()).apply()
+                        lifecycleScope.launch {
+                            repository.insertTransaction(TransactionDto(name = desc, amount = value, type = kind,
+                                category = cat, date = date.toString(), time = time))
+                        }
+                        selectedMonth = YearMonth.from(date)
+                        startDate = null; endDate = null; allDates = false; typeFilter = 0
+                        renderEntries()
+                        dialog.dismiss()
                     }
-
-                    renderEntries()
-                    dialog.dismiss()
                 }
             }
         }
         dialog.show()
     }
-
-    private fun readEntries(): JSONArray = try {
-        JSONArray(prefs.getString("entries", "[]"))
-    } catch (_: Exception) { JSONArray() }
-
-    private fun renderEntries() {
-        results.removeAllViews()
-        dateLabel.text = if (startDate != null && endDate != null)
-            "${startDate!!.format(formatter)} – ${endDate!!.format(formatter)}"
-        else "As of ${LocalDate.now().format(formatter)}"
-        val entries = readEntries()
-        val matches = mutableListOf<Entry>()
-        for (i in 0 until entries.length()) {
-            try {
-                val obj = entries.getJSONObject(i)
-                val date = LocalDate.parse(obj.getString("date"))
-                if ((startDate == null || !date.isBefore(startDate)) &&
-                    (endDate == null || !date.isAfter(endDate))) {
-                    matches.add(Entry(date, obj.optString("time", ""), obj.getString("name"),
-                        obj.getDouble("amount"), obj.optString("type", "expense"), i))
-                }
-            } catch (_: Exception) { /* Keep other valid saved transactions. */ }
-        }
-        matches.sortWith(compareByDescending<Entry> { it.date }
-            .thenByDescending { it.sortTime }.thenByDescending { it.order })
-        if (matches.isEmpty()) {
-            results.addView(textLabel("No transactions found for this date range.", 14f).apply {
-                setPadding(20.dp(), 28.dp(), 20.dp(), 16.dp())
-            })
-            return
-        }
-        var previous: LocalDate? = null
-        for (entry in matches) {
-            if (entry.date != previous) {
-                val heading = when (entry.date) {
-                    LocalDate.now() -> "Today"
-                    LocalDate.now().minusDays(1) -> "Yesterday"
-                    else -> entry.date.format(formatter)
-                }
-                results.addView(textLabel(heading, 17f, true).apply {
-                    setBackgroundColor(light)
-                    setPadding(20.dp(), 11.dp(), 20.dp(), 11.dp())
-                })
-                previous = entry.date
-            }
-            val item = LinearLayout(requireContext()).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(20.dp(), 13.dp(), 20.dp(), 15.dp())
-            }
-            val time = try {
-                java.time.LocalTime.parse(entry.time, java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
-                    .format(timeFormatter)
-            } catch (_: Exception) { "Time not recorded" }
-            item.addView(textLabel(time, 12f).apply { setTextColor(Color.rgb(110, 103, 125)) })
-            val line = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            line.addView(textLabel(entry.name, 16f, true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END },
-                LinearLayout.LayoutParams(0, -2, 1f))
-            val isIncome = entry.type.equals("income", ignoreCase = true)
-            val formatted = String.format(Locale.US, "%,.2f", entry.amount)
-            line.addView(textLabel("${if (isIncome) "+" else "−"}₱$formatted", 16f, true).apply {
-                setTextColor(if (isIncome) Color.rgb(39, 132, 91) else Color.rgb(182, 67, 79))
-                setPadding(8.dp(), 0, 0, 0)
-            })
-            item.addView(line)
-            results.addView(item)
-            results.addView(android.view.View(requireContext()).apply { setBackgroundColor(Color.rgb(235, 230, 239)) },
-                LinearLayout.LayoutParams(-1, 1.dp()))
-        }
-    }
-
-    private fun Int.dp() = (this * resources.displayMetrics.density).toInt()
 }

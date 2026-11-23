@@ -1,23 +1,21 @@
 package com.example.pesowise
 
 import android.Manifest
+import android.content.Context.MODE_PRIVATE
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import android.content.Context.MODE_PRIVATE
+import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.CalendarView
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.Spinner
-import android.widget.TextView
-import android.widget.Toast
+import android.view.ViewGroup
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
-import androidx.fragment.app.Fragment
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.pesowise.data.PesoWiseRepository
 import com.example.pesowise.data.ReminderDto
@@ -26,50 +24,25 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.time.LocalDate
-import java.time.ZoneId
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import java.util.UUID
 
-class CalendarFragment : Fragment(R.layout.activity_calendar) {
-
-    // UI Components
-    private lateinit var calendarView: CalendarView
-    private lateinit var txtSelectedDate: TextView
+class CalendarFragment : Fragment() {
+    private var selectedDate = LocalDate.now()
+    private var displayedMonth = YearMonth.now()
+    private lateinit var ui: FinanceUi
+    private lateinit var screen: FinanceScreen
+    private lateinit var calendarBody: LinearLayout
     private lateinit var reminderContainer: LinearLayout
-
-    private val repository by lazy {
-        PesoWiseRepository()
-    }
-
-    // Selected calendar date
-    private var selectedDate: LocalDate = LocalDate.now()
-
-    // Date formatting
-    private val dateFormatter =
-        DateTimeFormatter.ofPattern(
-            "MMMM dd, yyyy",
-            Locale.ENGLISH
-        )
-
-    // Local storage
-    private val preferences by lazy {
-        requireContext().getSharedPreferences(
-            "PesoWiseReminders",
-            MODE_PRIVATE
-        )
-    }
-
-    // Reminder collection
+    private val repository by lazy { PesoWiseRepository() }
+    private val preferences by lazy { requireContext().getSharedPreferences("PesoWiseReminders", MODE_PRIVATE) }
     private val reminders = mutableListOf<Reminder>()
+    private val dateFormatter = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.ENGLISH)
 
-    // Reminder model
-    data class Reminder(
-        val id: String,
-        val title: String,
-        val dueDate: LocalDate,
-        val daysBefore: Int
-    )
+    data class Reminder(val id: String, val title: String, val dueDate: LocalDate, val daysBefore: Int)
 
     private val notificationPermissionLauncher =
         registerForActivityResult(
@@ -100,89 +73,89 @@ class CalendarFragment : Fragment(R.layout.activity_calendar) {
         }
     }
     
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
 
-        // Request notification permission
-        requestNotificationPermission()
-
-        // Initialize UI
-        calendarView = requireView().findViewById(R.id.calendarView)
-        txtSelectedDate = requireView().findViewById(R.id.txtSelectedDate)
-        reminderContainer = requireView().findViewById(R.id.reminderContainer)
-
-        // Restore selected date
-        selectedDate = savedInstanceState
-            ?.getString("selected_date")
-            ?.let {
-                LocalDate.parse(it)
-            }
-            ?: LocalDate.now()
-
-        // Set calendar to selected date
-        calendarView.date = selectedDate
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
-
-        updateSelectedDate()
-
-        // Load previously saved reminders
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        selectedDate = savedInstanceState?.getString("selected_date")?.let(LocalDate::parse) ?: selectedDate
+        displayedMonth = savedInstanceState?.getString("displayed_month")?.let(YearMonth::parse) ?: YearMonth.from(selectedDate)
+        ui = FinanceUi(requireContext())
+        screen = ui.screen("Calendar", displayedMonth, {
+            ui.pickMonth(displayedMonth) { changeMonth(it) }
+        }, "Add reminder", ::showReminderDialog)
+        calendarBody = ui.card()
+        reminderContainer = ui.column()
+        ui.add(screen.content, calendarBody)
+        ui.add(screen.content, reminderContainer)
         loadReminders()
         displayReminders()
+        return screen.root
+    }
 
-        // Schedule previously saved upcoming reminders
-        for (reminder in reminders) {
-            ReminderScheduler.schedule(
-                context = requireContext(),
-                id = reminder.id,
-                title = reminder.title,
-                dueDate = reminder.dueDate,
-                daysBefore = reminder.daysBefore
-            )
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        requestNotificationPermission()
+        reminders.forEach {
+            ReminderScheduler.schedule(requireContext(), it.id, it.title, it.dueDate, it.daysBefore)
         }
-
-        // Calendar date selection
-        calendarView.setOnDateChangeListener {
-                _, year, month, dayOfMonth ->
-
-            selectedDate = LocalDate.of(
-                year,
-                month + 1,
-                dayOfMonth
-            )
-
-            updateSelectedDate()
-        }
-
-        // Add Reminder button
-        requireView().findViewById<Button>(R.id.btnAddReminder)
-            .setOnClickListener {
-                showReminderDialog()
-            }
-
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString(
-            "selected_date",
-            selectedDate.toString()
-        )
+        outState.putString("selected_date", selectedDate.toString())
+        outState.putString("displayed_month", displayedMonth.toString())
         super.onSaveInstanceState(outState)
     }
 
-    // -----------------------------------------
-    // UPDATE SELECTED DATE
-    // -----------------------------------------
-
-    private fun updateSelectedDate() {
-        txtSelectedDate.text =
-            "Selected Date: ${selectedDate.format(dateFormatter)}"
+    private fun changeMonth(month: YearMonth) {
+        displayedMonth = month
+        selectedDate = month.atDay(minOf(selectedDate.dayOfMonth, month.lengthOfMonth()))
+        displayReminders()
     }
 
-    // -----------------------------------------
-    // ADD REMINDER DIALOG
-    // -----------------------------------------
+    private fun renderCalendar() {
+        screen.monthButton.text = displayedMonth.format(FinanceUi.MONTH_FORMAT)
+        screen.monthButton.contentDescription = "Select month, ${screen.monthButton.text}"
+        calendarBody.removeAllViews()
+        val header = ui.row()
+        header.addView(ui.iconButton(R.drawable.ic_ui_left, "Previous month") { changeMonth(displayedMonth.minusMonths(1)) }.apply { strokeWidth = 0 })
+        ui.add(header, ui.text(displayedMonth.format(FinanceUi.MONTH_FORMAT), 16f, true).apply { gravity = Gravity.CENTER }, width = 0, weight = 1f)
+        header.addView(ui.iconButton(R.drawable.ic_ui_right, "Next month") { changeMonth(displayedMonth.plusMonths(1)) }.apply { strokeWidth = 0 })
+        ui.add(calendarBody, header, bottom = 10)
+        val weekdays = ui.row().apply {
+            background = ui.shape(FinanceColors.lavender, 10)
+            setPadding(0, ui.dp(8), 0, ui.dp(8))
+        }
+        listOf("S", "M", "T", "W", "T", "F", "S").forEach {
+            ui.add(weekdays, ui.text(it, 12f, true, FinanceColors.muted).apply { gravity = Gravity.CENTER }, width = 0, weight = 1f)
+        }
+        ui.add(calendarBody, weekdays, bottom = 8)
+        val datesWithReminders = reminders.map { it.dueDate }.toSet()
+        calendarCells(displayedMonth).chunked(7).forEach { week ->
+            val row = ui.row()
+            week.forEach { date ->
+                val cell = FrameLayout(requireContext())
+                if (date != null) {
+                    val selected = date == selectedDate
+                    val label = ui.text(date.dayOfMonth.toString(), 14f, selected || date == LocalDate.now(),
+                        if (selected) Color.WHITE else if (date == LocalDate.now()) FinanceColors.purple else FinanceColors.ink).apply {
+                        gravity = Gravity.CENTER
+                        if (selected) background = ui.shape(FinanceColors.purple, 24)
+                    }
+                    cell.addView(label, FrameLayout.LayoutParams(ui.dp(36), ui.dp(36), Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+                    if (date in datesWithReminders) cell.addView(View(requireContext()).apply {
+                        background = ui.shape(FinanceColors.purple, 4)
+                    }, FrameLayout.LayoutParams(ui.dp(4), ui.dp(4), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = ui.dp(4) })
+                    cell.isClickable = true
+                    cell.isFocusable = true
+                    cell.isSelected = selected
+                    cell.contentDescription = date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.ENGLISH)) +
+                        (if (selected) ", selected" else "") + (if (date in datesWithReminders) ", has reminders" else "")
+                    cell.setOnClickListener { selectedDate = date; displayReminders() }
+                    label.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }
+                ui.add(row, cell, width = 0, height = ui.dp(48), weight = 1f)
+            }
+            ui.add(calendarBody, row)
+        }
+    }
 
     private fun showReminderDialog() {
 
@@ -235,7 +208,7 @@ class CalendarFragment : Fragment(R.layout.activity_calendar) {
         layout.addView(dateText)
         layout.addView(reminderSpinner)
 
-        val dialog = AlertDialog.Builder(requireContext())
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle("Add Reminder")
             .setView(layout)
             .setPositiveButton("Save", null)
@@ -402,60 +375,46 @@ class CalendarFragment : Fragment(R.layout.activity_calendar) {
         }
     }
 
-    // -----------------------------------------
-    // DISPLAY REMINDERS
-    // -----------------------------------------
 
     private fun displayReminders() {
-
-        // Remove previously displayed views
+        if (!::reminderContainer.isInitialized) return
+        renderCalendar()
         reminderContainer.removeAllViews()
-
-        if (reminders.isEmpty()) {
-
-            val emptyText = TextView(requireContext()).apply {
-                text = "No reminders added yet."
-                textSize = 16f
-                setPadding(12, 12, 12, 12)
+        val monthReminders = reminders.filter { YearMonth.from(it.dueDate) == displayedMonth }.sortedBy { it.dueDate }
+        val upcoming = monthReminders.filter { !it.dueDate.isBefore(LocalDate.now()) }
+        val earlier = monthReminders.filter { it.dueDate.isBefore(LocalDate.now()) }
+        ui.heading(reminderContainer, "Upcoming reminders", ui.badge(upcoming.size.toString()))
+        if (upcoming.isEmpty()) ui.empty(reminderContainer, "Nothing coming up", "Choose a date and add a reminder for this month.", R.drawable.ic_ui_bell)
+        fun addReminder(reminder: Reminder) {
+            val card = ui.card(padding = 12)
+            val row = ui.row()
+            row.addView(ui.icon(categoryIcon(reminder.title)))
+            ui.gap(row, 12, true)
+            val labels = ui.column()
+            ui.add(labels, ui.text(reminder.title, 15f, true))
+            ui.add(labels, ui.text(reminder.dueDate.format(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH)),
+                12f, color = FinanceColors.muted), top = 4)
+            val notificationDate = reminder.dueDate.minusDays(reminder.daysBefore.toLong())
+            ui.add(labels, ui.text("Remind " + notificationDate.format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)),
+                11f, color = FinanceColors.muted), top = 2)
+            ui.add(row, labels, width = 0, weight = 1f)
+            ui.gap(row, 6, true)
+            val days = ChronoUnit.DAYS.between(LocalDate.now(), reminder.dueDate)
+            val timing = when {
+                days < 0 -> "Past due"
+                days == 0L -> "Today"
+                days == 1L -> "Tomorrow"
+                else -> "In $days days"
             }
-
-            reminderContainer.addView(emptyText)
-            return
+            row.addView(ui.badge(timing, if (days < 0) FinanceColors.coral else FinanceColors.purple,
+                if (days < 0) FinanceColors.coralTint else FinanceColors.lavender))
+            ui.add(card, row)
+            ui.add(reminderContainer, card, bottom = 10)
         }
-
-        // Sort by earliest due date
-        val sortedReminders =
-            reminders.sortedBy { it.dueDate }
-
-        for (reminder in sortedReminders) {
-
-            val notificationDate =
-                reminder.dueDate.minusDays(
-                    reminder.daysBefore.toLong()
-                )
-
-            val reminderText = TextView(requireContext()).apply {
-
-                text = """
-                    ${reminder.title}
-                    Due: ${reminder.dueDate.format(dateFormatter)}
-                    Remind: ${notificationDate.format(dateFormatter)}
-                """.trimIndent()
-
-                textSize = 16f
-
-                val padding =
-                    (16 * resources.displayMetrics.density).toInt()
-
-                setPadding(
-                    padding,
-                    padding,
-                    padding,
-                    padding
-                )
-            }
-
-            reminderContainer.addView(reminderText)
+        upcoming.forEach(::addReminder)
+        if (earlier.isNotEmpty()) {
+            ui.heading(reminderContainer, "Earlier this month")
+            earlier.forEach(::addReminder)
         }
     }
 }

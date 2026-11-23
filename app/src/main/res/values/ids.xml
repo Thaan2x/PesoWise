@@ -1,0 +1,4 @@
+<resources>
+    <item name="finance_page_title" type="id" />
+    <item name="finance_month_picker" type="id" />
+</resources>

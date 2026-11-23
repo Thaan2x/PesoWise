@@ -37,6 +37,8 @@ internal fun Activity.updateStatusBarAppearance(backgroundView: View) {
     attributes.recycle()
     val root = findViewById<ViewGroup>(android.R.id.content).getChildAt(0) ?: return
     root.setBackgroundColor(backgroundColor)
-    WindowCompat.getInsetsController(window, root).isAppearanceLightStatusBars =
-        ColorUtils.calculateLuminance(backgroundColor) > 0.5
+    WindowCompat.getInsetsController(window, root).apply {
+        isAppearanceLightStatusBars = ColorUtils.calculateLuminance(backgroundColor) > 0.5
+        isAppearanceLightNavigationBars = true
+    }
 }
