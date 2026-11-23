@@ -218,18 +218,13 @@ class TransactionsFragment : Fragment() {
         val category = Spinner(requireContext()).apply { adapter = categoryAdapter }
         fun loadCategories() {
             val previous = category.selectedItem?.toString()
-            val stored = requireContext().getSharedPreferences("PesoWiseBudget", MODE_PRIVATE)
-            val plans = runCatching { JSONArray(stored.getString("${YearMonth.from(date)}_expenses", "[]")) }.getOrDefault(JSONArray())
+            val options = listOf("Unassigned") + ExpenseCategoryStore.names(requireContext())
             categoryAdapter.setNotifyOnChange(false)
             categoryAdapter.clear()
-            categoryAdapter.add("Unassigned")
-            for (i in 0 until plans.length()) {
-                val value = plans.optJSONObject(i)?.optString("name").orEmpty()
-                if (value.isNotBlank() && value !in categories) categoryAdapter.add(value)
-            }
+            categoryAdapter.addAll(options)
             categoryAdapter.notifyDataSetChanged()
-            val index = categories.indexOf(previous)
-            if (index >= 0) category.setSelection(index)
+            val index = options.indexOfFirst { it.equals(previous, ignoreCase = true) }
+            category.setSelection(if (index >= 0) index else 0)
         }
         loadCategories()
         val dateButton = ui.button("Date: ${date.format(formatter)}")

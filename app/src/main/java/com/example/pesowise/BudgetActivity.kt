@@ -290,6 +290,8 @@ class BudgetFragment : Fragment() {
                         )
 
                         saveExpenses(items)
+                        // Keep this name reusable even when the monthly plan changes.
+                        ExpenseCategoryStore.add(requireContext(), expName)
 
                         // Sync planned expense with Supabase
                         lifecycleScope.launch {
