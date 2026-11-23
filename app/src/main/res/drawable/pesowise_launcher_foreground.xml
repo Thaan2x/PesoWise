@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- The complete PW mark fits within the adaptive icon's circular safe area. -->
+    <group
+        android:scaleX="0.0675"
+        android:scaleY="0.0675"
+        android:translateX="10.355"
+        android:translateY="11.205">
+
+        <!-- W ribbon and upward arrow. -->
+        <path
+            android:fillColor="#FFFBFF"
+            android:pathData="M378,690 L494,662 L570,795 L644,643 Q659,606 685,606 Q711,606 727,636 L826,782 L906,519 L879,516 Q875,514 878,509 L1028,416 Q1040,410 1034,430 L884,872 Q874,913 841,913 L808,913 Q774,913 758,880 L707,788 L655,882 Q638,913 604,913 L570,913 Q536,913 520,884 Z" />
+
+        <!-- Lavender fold beneath the P. -->
+        <path
+            android:fillColor="#EADDFF"
+            android:pathData="M378,690 L494,662 L558,774 L450,785 Z" />
+
+        <!-- P bowl flowing into the left upright. -->
+        <path
+            android:fillColor="#FFFBFF"
+            android:pathData="M270,355 L521,355 C615,355 674,421 674,509 C674,598 615,662 526,662 L476,662 C406,662 365,702 365,773 L365,893 Q365,913 345,913 L274,913 Q254,913 254,893 L254,736 C254,645 299,587 365,557 L520,557 C549,557 566,539 566,510 C566,477 548,452 516,452 L365,452 L365,550 C321,568 281,603 254,646 L254,373 Q254,355 270,355 Z" />
+    </group>
+</vector>

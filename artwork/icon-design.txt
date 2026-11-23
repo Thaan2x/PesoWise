@@ -1,0 +1,17 @@
+PesoWise launcher icon
+
+Selected concept: PW monogram, option 2.
+Generation tool: built-in image_gen.
+Reference image: pesowise-icon-pw-concept.png (in this directory).
+
+Original generation prompt:
+Use case: logo-brand. Asset type: Android launcher icon concept preview for PesoWise, a personal budgeting and expense tracking app for Philippine pesos. Generate exactly ONE polished app icon, square image. Design must read instantly at small launcher sizes, with bold simple geometry, crisp vector-like edges, restrained detail, and generous space around the central mark. Purple #6750A4 is the brand color, supported by pale lavender #EADDFF and warm white #FFFBFF. Show a large rounded-square app tile straight-on, centered on a plain warm-white background, occupying about 85% of the image. Flat graphic design with subtle depth only if useful. No phone mockup, no interface, no captions, no app name, no watermark, no tiny lettering. Keep the central symbol within the middle two thirds of the tile. Direction: an original bold geometric PW monogram made from a single continuous warm-white ribbon on a rich purple tile. The P and W should interlock cleanly, with the W's rising final stroke conveying financial progress. Strong readable silhouette, clever negative space, a restrained lavender accent. Only the letters P and W may appear, as the actual logo symbol. No currency sign and no surrounding coin.
+
+Android implementation:
+The selected monogram is recreated as a VectorDrawable with a warm-white PW ribbon, lavender fold and purple adaptive background. The foreground fits inside the circular safe area. Android supplies the launcher mask; the same silhouette supports themed icons.
+
+Resources:
+app/src/main/res/drawable/pesowise_launcher_foreground.xml
+app/src/main/res/drawable/pesowise_launcher_background.xml
+app/src/main/res/mipmap-anydpi/pesowise_launcher.xml
+app/src/main/res/mipmap-anydpi/pesowise_launcher_round.xml

@@ -79,9 +79,12 @@ class TransactionsFragment : Fragment() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(255, 251, 255))
         }
-        root.addView(textLabel("Transaction History", 23f, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(8.dp(), 22.dp(), 8.dp(), 16.dp())
+        root.addView(TextView(requireContext()).apply {
+            text = "Transaction History"
+            textSize = 26f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.START
+            setPadding(24.dp(), 24.dp(), 24.dp(), 16.dp())
         })
         val addTransactionButton = button("+ Add Transaction", false)
         root.addView(addTransactionButton, LinearLayout.LayoutParams(-1, 48.dp()).apply {
