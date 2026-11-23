@@ -3,11 +3,12 @@ package com.example.pesowise
 
 import android.graphics.Color
 import android.os.Bundle
+import android.content.Context.MODE_PRIVATE
 import android.view.View
 import android.text.InputType
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.pesowise.data.MonthlyBudgetDto
 import com.example.pesowise.data.PesoWiseRepository
@@ -21,10 +22,10 @@ import java.text.NumberFormat
 import java.time.YearMonth
 import java.util.Locale
 
-class BudgetActivity : AppCompatActivity() {
+class BudgetFragment : Fragment(R.layout.activity_budget) {
 
     private val prefs by lazy {
-        getSharedPreferences("PesoWiseBudget", MODE_PRIVATE)
+        requireContext().getSharedPreferences("PesoWiseBudget", MODE_PRIVATE)
     }
 
     private val repository by lazy {
@@ -50,8 +51,8 @@ class BudgetActivity : AppCompatActivity() {
     private var deleteSelectionMode = false
 
     private fun updateDeleteControls() {
-        val trash = findViewById<ImageButton>(R.id.btnDeleteSelected)
-        val remove = findViewById<Button>(R.id.btnRemoveSelected)
+        val trash = requireView().findViewById<ImageButton>(R.id.btnDeleteSelected)
+        val remove = requireView().findViewById<Button>(R.id.btnRemoveSelected)
         val hasSelection = deleteSelectionMode && selectedExpenseIndices.isNotEmpty()
         trash.visibility = if (hasSelection) View.GONE else View.VISIBLE
         remove.visibility = if (hasSelection) View.VISIBLE else View.GONE
@@ -144,27 +145,25 @@ class BudgetActivity : AppCompatActivity() {
             .apply()
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
 
-        setContentView(R.layout.activity_budget)
-
-        balanceView = findViewById(R.id.txtMoney)
-        budgetView = findViewById(R.id.txtBudget)
-        plannedView = findViewById(R.id.txtSpent)
-        leftView = findViewById(R.id.txtRemaining)
-        statusView = findViewById(R.id.txtStatus)
-        progress = findViewById(R.id.budgetProgress)
-        expenseList = findViewById(R.id.expenseList)
-        findViewById<ImageButton>(R.id.btnDeleteSelected).setOnClickListener {
+        balanceView = requireView().findViewById(R.id.txtMoney)
+        budgetView = requireView().findViewById(R.id.txtBudget)
+        plannedView = requireView().findViewById(R.id.txtSpent)
+        leftView = requireView().findViewById(R.id.txtRemaining)
+        statusView = requireView().findViewById(R.id.txtStatus)
+        progress = requireView().findViewById(R.id.budgetProgress)
+        expenseList = requireView().findViewById(R.id.expenseList)
+        requireView().findViewById<ImageButton>(R.id.btnDeleteSelected).setOnClickListener {
             deleteSelectionMode = !deleteSelectionMode
             selectedExpenseIndices.clear()
             refresh()
         }
-        findViewById<Button>(R.id.btnRemoveSelected).setOnClickListener {
+        requireView().findViewById<Button>(R.id.btnRemoveSelected).setOnClickListener {
             if (selectedExpenseIndices.isNotEmpty()) {
                 val count = selectedExpenseIndices.size
-                AlertDialog.Builder(this)
+                AlertDialog.Builder(requireContext())
                     .setTitle("Delete selected expenses?")
                     .setMessage("Remove $count planned expense(s)? Recorded transactions will not be deleted.")
                     .setNegativeButton("Cancel", null)
@@ -182,7 +181,7 @@ class BudgetActivity : AppCompatActivity() {
             }
         }
 
-        findViewById<Button>(R.id.btnSetMoney)
+        requireView().findViewById<Button>(R.id.btnSetMoney)
             .setOnClickListener {
                 editAmount(
                     "money",
@@ -190,7 +189,7 @@ class BudgetActivity : AppCompatActivity() {
                 )
             }
 
-        findViewById<Button>(R.id.btnSetBudget)
+        requireView().findViewById<Button>(R.id.btnSetBudget)
             .setOnClickListener {
                 editAmount(
                     "budget",
@@ -198,14 +197,9 @@ class BudgetActivity : AppCompatActivity() {
                 )
             }
 
-        findViewById<Button>(R.id.btnAddExpense)
+        requireView().findViewById<Button>(R.id.btnAddExpense)
             .setOnClickListener {
                 addExpense()
-            }
-
-        findViewById<Button>(R.id.btnBack)
-            .setOnClickListener {
-                finish()
             }
 
         refresh()
@@ -224,7 +218,7 @@ class BudgetActivity : AppCompatActivity() {
         title: String
     ) {
 
-        val input = EditText(this).apply {
+        val input = EditText(requireContext()).apply {
 
             inputType =
                 InputType.TYPE_CLASS_NUMBER or
@@ -242,7 +236,7 @@ class BudgetActivity : AppCompatActivity() {
             selectAll()
         }
 
-        val dialog = AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle(title)
             .setView(input)
             .setPositiveButton("Save", null)
@@ -294,12 +288,12 @@ class BudgetActivity : AppCompatActivity() {
 
     private fun addExpense() {
 
-        val container = LinearLayout(this).apply {
+        val container = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 8, 48, 0)
         }
 
-        val nameInput = EditText(this).apply {
+        val nameInput = EditText(requireContext()).apply {
 
             hint = "Expense (e.g. Rent, Food)"
 
@@ -308,7 +302,7 @@ class BudgetActivity : AppCompatActivity() {
                         InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         }
 
-        val valueInput = EditText(this).apply {
+        val valueInput = EditText(requireContext()).apply {
 
             hint = "Planned amount in PHP"
 
@@ -320,7 +314,7 @@ class BudgetActivity : AppCompatActivity() {
         container.addView(nameInput)
         container.addView(valueInput)
 
-        val dialog = AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle("Add planned expense")
             .setView(container)
             .setPositiveButton("Add", null)
@@ -387,7 +381,7 @@ class BudgetActivity : AppCompatActivity() {
     private fun actualExpenses(): Pair<Map<String, Long>, Long> {
         val totals = mutableMapOf<String, Long>()
         var total = 0L
-        val transactionPrefs = getSharedPreferences("pesowise_transactions", MODE_PRIVATE)
+        val transactionPrefs = requireContext().getSharedPreferences("pesowise_transactions", MODE_PRIVATE)
         val transactions = try {
             JSONArray(transactionPrefs.getString("entries", "[]"))
         } catch (_: Exception) { JSONArray() }
@@ -419,17 +413,17 @@ class BudgetActivity : AppCompatActivity() {
         val remainingMoney = money - spent
         val remainingBudget = budget - spent
         balanceView.text = amount(money)
-        findViewById<TextView>(R.id.txtCashLeft).apply {
+        requireView().findViewById<TextView>(R.id.txtCashLeft).apply {
             text = amount(remainingMoney)
             setTextColor(if (remainingMoney < 0L) Color.rgb(183, 28, 28) else Color.rgb(46, 125, 50))
         }
-        findViewById<TextView>(R.id.txtTotalSpent).text = amount(spent)
+        requireView().findViewById<TextView>(R.id.txtTotalSpent).text = amount(spent)
         budgetView.text = amount(budget)
         plannedView.text = "Planned: ${amount(planned)}  |  Spent: ${amount(spent)}"
         leftView.text = "Money left: ${amount(remainingMoney)}  |  Budget left: ${amount(remainingBudget)}"
         val ratio = if (budget > 0L) ((spent.toDouble() / budget) * 100).toInt().coerceIn(0, 100) else 0
         progress.progress = ratio
-        findViewById<TextView>(R.id.txtPercentage).text = "$ratio% of budget spent"
+        requireView().findViewById<TextView>(R.id.txtPercentage).text = "$ratio% of budget spent"
         val projected = maxOf(planned, spent)
         val status = when {
             money == 0L -> "Enter your available money to check affordability."
@@ -447,7 +441,7 @@ class BudgetActivity : AppCompatActivity() {
         expenseList.removeAllViews()
         updateDeleteControls()
         val purple = Color.rgb(103, 80, 164)
-        fun cell(value: String, width: Int, bold: Boolean = false): TextView = TextView(this).apply {
+        fun cell(value: String, width: Int, bold: Boolean = false): TextView = TextView(requireContext()).apply {
             text = value
             textSize = if (bold) 14f else 15f
             setTextColor(if (bold) purple else Color.DKGRAY)
@@ -456,7 +450,7 @@ class BudgetActivity : AppCompatActivity() {
             if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
         }
         fun tableRow(category: String, plan: String, actual: String, left: String, header: Boolean = false): LinearLayout =
-            LinearLayout(this).apply {
+            LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 if (header) setBackgroundColor(Color.rgb(240, 235, 248))
@@ -469,11 +463,11 @@ class BudgetActivity : AppCompatActivity() {
         // A checkbox selects a planned expense for bulk deletion; it does not record spending.
         items.forEachIndexed { index, item ->
             val actual = actualByCategory[item.name] ?: 0L
-            val row = LinearLayout(this).apply {
+            val row = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
             }
-            val checkbox = CheckBox(this).apply {
+            val checkbox = CheckBox(requireContext()).apply {
                 text = item.name
                 textSize = 15f
                 setTextColor(Color.DKGRAY)
@@ -494,7 +488,7 @@ class BudgetActivity : AppCompatActivity() {
             row.addView(cell(amount(actual), 115))
             row.addView(cell(amount(item.cents - actual), 115))
             expenseList.addView(row)
-            expenseList.addView(View(this).apply {
+            expenseList.addView(View(requireContext()).apply {
                 setBackgroundColor(Color.rgb(233, 228, 239))
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1.dp()
@@ -506,7 +500,7 @@ class BudgetActivity : AppCompatActivity() {
             expenseList.addView(tableRow(category, "—", amount(value), "—"))
         }
         if (items.isEmpty() && actualByCategory.isEmpty()) {
-            expenseList.addView(TextView(this).apply {
+            expenseList.addView(TextView(requireContext()).apply {
                 text = "No expenses yet. Add a planned expense or record a purchase."
                 setPadding(8, 20, 8, 20)
             })

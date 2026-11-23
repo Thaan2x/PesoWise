@@ -21,22 +21,6 @@
 
         </activity>
 
-        <activity
-            android:name=".TransactionListActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".BudgetActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".ReportsActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".CalendarActivity"
-            android:exported="false" />
-
     </application>
 
 </manifest>

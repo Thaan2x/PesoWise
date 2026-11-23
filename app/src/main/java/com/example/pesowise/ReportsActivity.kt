@@ -1,10 +1,12 @@
 package com.example.pesowise
 
 import android.os.Bundle
+import android.content.Context.MODE_PRIVATE
+import android.view.View
 import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.pesowise.data.PesoWiseRepository
 import kotlinx.coroutines.launch
@@ -14,7 +16,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-class ReportsActivity : AppCompatActivity() {
+class ReportsFragment : Fragment(R.layout.activity_reports) {
 
     private var demoMode = false
     private val repository by lazy { PesoWiseRepository() }
@@ -28,18 +30,17 @@ class ReportsActivity : AppCompatActivity() {
     private lateinit var progressExpenses: ProgressBar
     private lateinit var btnDemoData: Button
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_reports)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
 
-        txtIncome = findViewById(R.id.txtIncome)
-        txtExpenses = findViewById(R.id.txtExpenses)
-        txtNetBalance = findViewById(R.id.txtNetBalance)
-        txtReportStatus = findViewById(R.id.txtReportStatus)
+        txtIncome = requireView().findViewById(R.id.txtIncome)
+        txtExpenses = requireView().findViewById(R.id.txtExpenses)
+        txtNetBalance = requireView().findViewById(R.id.txtNetBalance)
+        txtReportStatus = requireView().findViewById(R.id.txtReportStatus)
 
-        progressIncome = findViewById(R.id.progressIncome)
-        progressExpenses = findViewById(R.id.progressExpenses)
-        btnDemoData = findViewById(R.id.btnDemoData)
+        progressIncome = requireView().findViewById(R.id.progressIncome)
+        progressExpenses = requireView().findViewById(R.id.progressExpenses)
+        btnDemoData = requireView().findViewById(R.id.btnDemoData)
 
         val currentMonth = LocalDate.now()
             .format(
@@ -49,7 +50,7 @@ class ReportsActivity : AppCompatActivity() {
                 )
             )
 
-        findViewById<TextView>(R.id.txtReportMonth)
+        requireView().findViewById<TextView>(R.id.txtReportMonth)
             .text = currentMonth
 
         demoMode = savedInstanceState
@@ -60,11 +61,10 @@ class ReportsActivity : AppCompatActivity() {
             updateReport()
         }
 
-        findViewById<Button>(R.id.btnBackReports)
-            .setOnClickListener {
-                finish()
-            }
+    }
 
+    override fun onResume() {
+        super.onResume()
         updateReport()
     }
 
@@ -85,7 +85,7 @@ class ReportsActivity : AppCompatActivity() {
         btnDemoData.text = "Show Demo Data"
 
         // Load local transactions & attempt Supabase fetch
-        val prefs = getSharedPreferences("pesowise_transactions", MODE_PRIVATE)
+        val prefs = requireContext().getSharedPreferences("pesowise_transactions", MODE_PRIVATE)
         val jsonArray = try {
             JSONArray(prefs.getString("entries", "[]"))
         } catch (_: Exception) { JSONArray() }
@@ -110,7 +110,7 @@ class ReportsActivity : AppCompatActivity() {
 
         renderMetrics(localIncome, localExpenses, "Connected to PesoWise Local & Supabase Storage")
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val result = repository.getTransactions()
             result.getOrNull()?.let { dtos ->
                 var remoteIncome = 0.0

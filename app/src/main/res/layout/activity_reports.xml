@@ -123,12 +123,5 @@
             android:layout_height="wrap_content"
             android:text="Show Demo Data"/>
 
-        <Button
-            android:id="@+id/btnBackReports"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Back to Dashboard"
-            android:layout_marginTop="12dp"/>
-
     </LinearLayout>
 </ScrollView>

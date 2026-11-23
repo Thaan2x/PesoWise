@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.content.Context.MODE_PRIVATE
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -15,7 +16,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.pesowise.data.PesoWiseRepository
@@ -30,7 +31,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 
-class CalendarActivity : AppCompatActivity() {
+class CalendarFragment : Fragment(R.layout.activity_calendar) {
 
     // UI Components
     private lateinit var calendarView: CalendarView
@@ -53,7 +54,7 @@ class CalendarActivity : AppCompatActivity() {
 
     // Local storage
     private val preferences by lazy {
-        getSharedPreferences(
+        requireContext().getSharedPreferences(
             "PesoWiseReminders",
             MODE_PRIVATE
         )
@@ -77,7 +78,7 @@ class CalendarActivity : AppCompatActivity() {
 
             if (!isGranted) {
                 Toast.makeText(
-                    this,
+                    requireContext(),
                     "Notifications are disabled. " +
                             "Enable them in Settings to receive alerts.",
                     Toast.LENGTH_LONG
@@ -89,7 +90,7 @@ class CalendarActivity : AppCompatActivity() {
 
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(
-                this,
+                requireContext(),
                 Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -99,17 +100,16 @@ class CalendarActivity : AppCompatActivity() {
         }
     }
     
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_calendar)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
 
         // Request notification permission
         requestNotificationPermission()
 
         // Initialize UI
-        calendarView = findViewById(R.id.calendarView)
-        txtSelectedDate = findViewById(R.id.txtSelectedDate)
-        reminderContainer = findViewById(R.id.reminderContainer)
+        calendarView = requireView().findViewById(R.id.calendarView)
+        txtSelectedDate = requireView().findViewById(R.id.txtSelectedDate)
+        reminderContainer = requireView().findViewById(R.id.reminderContainer)
 
         // Restore selected date
         selectedDate = savedInstanceState
@@ -134,7 +134,7 @@ class CalendarActivity : AppCompatActivity() {
         // Schedule previously saved upcoming reminders
         for (reminder in reminders) {
             ReminderScheduler.schedule(
-                context = this,
+                context = requireContext(),
                 id = reminder.id,
                 title = reminder.title,
                 dueDate = reminder.dueDate,
@@ -156,16 +156,11 @@ class CalendarActivity : AppCompatActivity() {
         }
 
         // Add Reminder button
-        findViewById<Button>(R.id.btnAddReminder)
+        requireView().findViewById<Button>(R.id.btnAddReminder)
             .setOnClickListener {
                 showReminderDialog()
             }
 
-        // Back to Dashboard button
-        findViewById<Button>(R.id.btnBackCalendar)
-            .setOnClickListener {
-                finish()
-            }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -193,7 +188,7 @@ class CalendarActivity : AppCompatActivity() {
 
         val dueDate = selectedDate
 
-        val layout = LinearLayout(this).apply {
+        val layout = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
 
             val padding =
@@ -202,13 +197,13 @@ class CalendarActivity : AppCompatActivity() {
             setPadding(padding, 8, padding, 0)
         }
 
-        val titleInput = EditText(this).apply {
+        val titleInput = EditText(requireContext()).apply {
             hint = "Reminder title (e.g. Bills)"
             inputType =
                 android.text.InputType.TYPE_CLASS_TEXT
         }
 
-        val dateText = TextView(this).apply {
+        val dateText = TextView(requireContext()).apply {
             text = "Due Date: ${dueDate.format(dateFormatter)}"
             textSize = 16f
             setPadding(0, 20, 0, 12)
@@ -222,10 +217,10 @@ class CalendarActivity : AppCompatActivity() {
             "7 days before"
         )
 
-        val reminderSpinner = Spinner(this)
+        val reminderSpinner = Spinner(requireContext())
 
         val adapter = ArrayAdapter(
-            this,
+            requireContext(),
             android.R.layout.simple_spinner_item,
             reminderOptions
         ).apply {
@@ -240,7 +235,7 @@ class CalendarActivity : AppCompatActivity() {
         layout.addView(dateText)
         layout.addView(reminderSpinner)
 
-        val dialog = AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle("Add Reminder")
             .setView(layout)
             .setPositiveButton("Save", null)
@@ -299,7 +294,7 @@ class CalendarActivity : AppCompatActivity() {
                     // Schedule notification
                     val isScheduled =
                         ReminderScheduler.schedule(
-                            context = this,
+                            context = requireContext(),
                             id = newReminder.id,
                             title = newReminder.title,
                             dueDate = newReminder.dueDate,
@@ -312,13 +307,13 @@ class CalendarActivity : AppCompatActivity() {
                     // Show result
                     if (isScheduled) {
                         Toast.makeText(
-                            this,
+                            requireContext(),
                             "Reminder saved and notification scheduled!",
                             Toast.LENGTH_LONG
                         ).show()
                     } else {
                         Toast.makeText(
-                            this,
+                            requireContext(),
                             "Reminder saved, but notification date has passed.",
                             Toast.LENGTH_LONG
                         ).show()
@@ -393,14 +388,14 @@ class CalendarActivity : AppCompatActivity() {
 
         } catch (e: JSONException) {
             Toast.makeText(
-                this,
+                requireContext(),
                 "Unable to load saved reminders.",
                 Toast.LENGTH_LONG
             ).show()
 
         } catch (e: java.time.format.DateTimeParseException) {
             Toast.makeText(
-                this,
+                requireContext(),
                 "Invalid date in saved reminders.",
                 Toast.LENGTH_LONG
             ).show()
@@ -418,7 +413,7 @@ class CalendarActivity : AppCompatActivity() {
 
         if (reminders.isEmpty()) {
 
-            val emptyText = TextView(this).apply {
+            val emptyText = TextView(requireContext()).apply {
                 text = "No reminders added yet."
                 textSize = 16f
                 setPadding(12, 12, 12, 12)
@@ -439,7 +434,7 @@ class CalendarActivity : AppCompatActivity() {
                     reminder.daysBefore.toLong()
                 )
 
-            val reminderText = TextView(this).apply {
+            val reminderText = TextView(requireContext()).apply {
 
                 text = """
                     ${reminder.title}
