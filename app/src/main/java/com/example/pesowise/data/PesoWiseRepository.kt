@@ -48,6 +48,18 @@ class PesoWiseRepository {
         }
     }
 
+    suspend fun deleteTransactionByNameAndDate(name: String, date: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            client.postgrest["transactions"].delete {
+                filter {
+                    eq("name", name)
+                    eq("date", date)
+                }
+            }
+            Unit
+        }
+    }
+
     // ==========================================
     // MONTHLY BUDGET & PLANNED EXPENSES CRUD
     // ==========================================
@@ -101,6 +113,18 @@ class PesoWiseRepository {
         }
     }
 
+    suspend fun deletePlannedExpenseByName(month: String, name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            client.postgrest["planned_expenses"].delete {
+                filter {
+                    eq("month", month)
+                    eq("name", name)
+                }
+            }
+            Unit
+        }
+    }
+
     // ==========================================
     // REMINDERS CRUD
     // ==========================================
@@ -125,6 +149,18 @@ class PesoWiseRepository {
             client.postgrest["reminders"].delete {
                 filter {
                     eq("id", id)
+                }
+            }
+            Unit
+        }
+    }
+
+    suspend fun deleteReminderByTitleAndDueDate(title: String, dueDate: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            client.postgrest["reminders"].delete {
+                filter {
+                    eq("title", title)
+                    eq("due_date", dueDate)
                 }
             }
             Unit

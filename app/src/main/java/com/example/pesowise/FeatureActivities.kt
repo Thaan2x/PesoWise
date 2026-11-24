@@ -14,6 +14,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.fragment.app.Fragment
@@ -164,6 +165,35 @@ class TransactionsFragment : Fragment() {
             ui.gap(row, 6, true)
             row.addView(ui.text((if (entry.isIncome) "+" else "−") + peso(entry.cents, true),
                 14f, true, if (entry.isIncome) FinanceColors.green else FinanceColors.ink))
+
+            row.isClickable = true
+            row.isFocusable = true
+            row.setOnClickListener {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Delete Transaction")
+                    .setMessage("Do you want to delete \"${entry.name}\"?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        val prefs = requireContext().getSharedPreferences("pesowise_transactions", MODE_PRIVATE)
+                        val array = try { JSONArray(prefs.getString("entries", "[]")) } catch (_: Exception) { JSONArray() }
+                        val updated = JSONArray()
+                        for (i in 0 until array.length()) {
+                            if (i != entry.order) {
+                                updated.put(array.get(i))
+                            }
+                        }
+                        prefs.edit().putString("entries", updated.toString()).apply()
+
+                        lifecycleScope.launch {
+                            repository.deleteTransactionByNameAndDate(entry.name, entry.date.toString())
+                        }
+
+                        renderEntries()
+                        Toast.makeText(requireContext(), "Transaction deleted", Toast.LENGTH_SHORT).show()
+                    }
+                    .show()
+            }
+
             ui.add(card, row)
         }
         ui.add(results, card)

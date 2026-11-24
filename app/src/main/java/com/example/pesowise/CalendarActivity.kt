@@ -409,6 +409,27 @@ class CalendarFragment : Fragment() {
             row.addView(ui.badge(timing, if (days < 0) FinanceColors.coral else FinanceColors.purple,
                 if (days < 0) FinanceColors.coralTint else FinanceColors.lavender))
             ui.add(card, row)
+
+            card.isClickable = true
+            card.isFocusable = true
+            card.setOnClickListener {
+                AlertDialog.Builder(requireContext())
+                    .setTitle("Delete Reminder")
+                    .setMessage("Do you want to delete \"${reminder.title}\"?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        reminders.remove(reminder)
+                        saveReminders()
+                        displayReminders()
+
+                        lifecycleScope.launch {
+                            repository.deleteReminderByTitleAndDueDate(reminder.title, reminder.dueDate.toString())
+                        }
+                        Toast.makeText(requireContext(), "Reminder deleted", Toast.LENGTH_SHORT).show()
+                    }
+                    .show()
+            }
+
             ui.add(reminderContainer, card, bottom = 10)
         }
         upcoming.forEach(::addReminder)

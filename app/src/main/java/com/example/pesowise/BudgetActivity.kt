@@ -327,11 +327,19 @@ class BudgetFragment : Fragment() {
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Remove") { _, _ ->
                 val items = expenses()
+                val expensesToRemove = indices.mapNotNull { items.getOrNull(it) }
                 indices.sortedDescending().forEach { if (it in items.indices) items.removeAt(it) }
                 saveExpenses(items)
                 deleteSelectionMode = false
                 selectedExpenseIndices.clear()
                 refresh()
+
+                // Delete from Supabase asynchronously
+                lifecycleScope.launch {
+                    for (expense in expensesToRemove) {
+                        repository.deletePlannedExpenseByName(month, expense.name)
+                    }
+                }
             }.show()
     }
 
